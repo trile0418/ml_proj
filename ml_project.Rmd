@@ -1,0 +1,230 @@
+---
+title: "Weight Lifting Manner Prediction Project"
+author: "Tri Le"
+date: "May 2015"
+output: html_document
+---
+   
+--------------------
+
+## Introduction
+The goal of this project is to predict the manner (class) in which people did the weight lifting exercise.  The following tasks are performed to achieve the goal: getting and cleaning data, performing exploratory data analysis, using cross validation for final model selection, building several predictive models, and predicting 20 different test cases using the selected model. 
+  
+The data set for this project was collected from the accelerometers worn on the belt, forearm, arm, and dumbell of six young healthy participants.  These six participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell 
+only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.  These classes are levels of the "classe" variable in the training set. 
+  
+--------------------
+
+```{r, echo=FALSE, results='hide'}
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(randomForest)
+```
+
+## Get data
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+```{r, echo=FALSE, results='hide'}
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(randomForest)
+```
+
+```{r}
+# get data
+if(!file.exists("pml-training.csv"))
+        download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile="pml-training.csv",method="curl")
+if(!file.exists("pml-testing.csv"))
+        download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile="pml-testing.csv",method="curl")
+training <- read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!", ""))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA", "#DIV/0!", ""))
+```
+  
+--------------------
+
+## Clean data
+Get the original dimension of the training data set.
+
+```{r}
+dim(training)
+```
+
+The first 6 variables carry no information about the manners of weight lifting exercise.  So, they are removed.
+
+```{r}
+# first 6 variables
+names(training[1:6])
+# remove the first 6 variables
+training <- training[,7:160]
+testing <- testing[,7:160]
+````
+
+In the summary of the training data set, there are a lot of variables which have more than 19200 missing data out of 19622 observations (98% missing data), so these variables are removed as well.  
+
+```{r, echo=FALSE, results='hide'}
+# summarize
+summary(training)
+```
+
+```{r}
+# remove variables with missing data
+no.na <- (apply(is.na(training), 2, sum) == 0)
+training <- training[, no.na]
+testing <- testing[, no.na]
+```
+  
+--------------------
+
+## Exploratory data analysis
+Get the new dimension of the training data set after cleaning.
+
+```{r}
+dim(training)
+```
+
+The new dimension above, with the number of features p much smaller than the number of observation N (p << N), shows that this training data set does not have high dimensional problem (p >> N), so less prone to overfitting.  
+      
+Principal Component Analysis (PCA) is used for data visualization by reducing 54 variables to 2 Principal Components (PC1 and PC2) so that 2D plot can be created (because we human can only visualize 2D or 3D graphs).  Note that PCA is used for data visualizaton ONLY in this project.  It is not used for data pre-processing or training because it could remove variables which have valuable information (signal) and it tends to be used for unsupervised machine learning only.
+  
+```{r,echo=FALSE,fig.width=5,fig.height=5}
+# use PCA to visualize data only
+plotdata <- data.frame(apply(training, 2, as.numeric))
+plotdata <- plotdata[,-54]
+preProc <- preProcess(plotdata, method="pca", pcaComp=2, na.remove=TRUE)
+# create new PC variables
+dataPC <- predict(preProc, plotdata)
+# plot PCs
+plot(dataPC[,1], dataPC[,2], col="blue", main="Plot of PC1 and PC2", ylab="PC1", xlab="PC2")
+```
+
+In the scatter plot above, all the data points concentrate and form five distinctive groups which likely are five classes (manners) of the weight lifting exercise.  There's only one data point on the far upper left corner, so it could be neglectible.        
+
+```{r,echo=FALSE,fig.width=5,fig.height=5}
+qplot(training$classe)
+```
+
+The histogram above shows that class A has more counts than the other but overall all classes are balanced.  
+  
+From data visualization, we can say that this training data set looks good. 
+
+--------------------
+
+## Split training data set for cross validation 
+Training data is splitted for cross validation with 70% data for sub training data set and 30% for sub cross validation data set.
+
+```{r}
+# split training data for cross validation
+set.seed(1513)
+trainIndex <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+train.set <- training[trainIndex,]
+cv.set <- training[-trainIndex,]
+```
+  
+--------------------
+
+## Build predictive models
+Three models constructed and tuned are K-Nearest Neighbor, Gradient Boosted Machine, and Random Forests.  Each model is automatically tuned and evaluated using 5-fold cross validation to estimate accuracy for model selection.  Note that both 5-fold and 10-fold were tried out and we saw that there's very little difference in the accuracy between two of them. Therefore, 5-fold is selected for shorter training time (little bit more bias, little bit less variance).  The set.seed function is used for each model for reproductivity.  
+
+```{r}
+# define training control
+control <- trainControl(method="cv", number=5)
+```
+
+### Model 1: K-Nearest Neighbor
+The K-Nearest Neighbor algorithm (KNN) is a method for classifying objects based on the closest training examples in the feature space.  KNN is a type of instance-based learning, or lazy learning where the function is only approximated locally and all computation is deferred until classification.  The KNN algorithm is amongst the simplest of all machine learning algorithms: an object is classified by a majority vote of its neighbors, with the object being assigned to the class most common amongst its k nearest neighbors (k is a positive integer, typically small).
+
+```{r}
+# knn model
+set.seed(1513) 
+knn.fit <- train(classe ~ ., data=train.set, method="knn", trControl=control)
+confusionMatrix(cv.set$classe, predict(knn.fit, cv.set))
+```
+  
+--------------------
+
+### Model 2: Gradient Boosted Machine
+In gradient boosting machine(GBM), the learning procedure consecutively fits new models to provide a more accurate estimate of the response variable. The principle idea behind this algorithm is to construct the new base-learners to be maximally correlated with the negative gradient of the loss function, associated with the whole ensemble. The loss functions applied can be arbitrary, but to give a better intuition, if the error function is the classic squared-error loss, the learning procedure would result in consecutive error-fitting. 
+
+```{r}
+# gbm model
+set.seed(1513)
+gbm.fit <- train(classe ~ ., data=train.set, method="gbm", trControl=control, verbose=FALSE)
+confusionMatrix(cv.set$classe, predict(gbm.fit, cv.set))
+```
+  
+--------------------
+
+### Model 3: Random Forests
+Random forests (Breiman, 2001) is a substantial modification of bagging that builds a large collection of de-correlated trees, and then averages them.  On many problems the performance of random forests is very similar to boosting, and they are simpler to train and tune.
+
+```{r}
+# randomforest model
+set.seed(1513)
+rf.fit <- train(classe ~ ., data=train.set, method="rf", trControl=control, importance=TRUE)
+confusionMatrix(cv.set$classe, predict(rf.fit, cv.set))
+```
+  
+--------------------
+
+## Model selection
+The resamples function is used to compare these three models based on their cross-validation statistics.  Since the random number seed was initialized prior to running these models, paired accuracy measurements exist for each data set.
+
+```{r,echo=FALSE}
+# resample to compare
+resamp <- resamples(list(KNN=knn.fit, GBM=gbm.fit, RF=rf.fit))
+# summarize
+summary(resamp)
+# boxplot
+bwplot(resamp)
+```
+
+KNN computation time:
+
+```{r,echo=FALSE}
+# knn computation time
+knn.fit$times$everything
+```
+
+GBM computation time:
+
+```{r,echo=FALSE}
+# gbm computation time
+gbm.fit$times$everything
+```
+
+RF computation time:
+
+```{r,echo=FALSE}
+# rf computation time
+rf.fit$times$everything
+```
+  
+### Final model
+From the summary, boxplot, and computation time lists, we can see that the Random Forests model has the highest accuracy score which is 0.996.  The GBM model has a very good accuracy score too, which is 0.986 (very closed to the RF accuracy score).  The GBM model has 3 times shorter computation time (compare to the RF model).  But because we have a limit of 2 times to predict for each test case in this project.  So, accuracy score is more important than computation time in this case.  Therefore, the Random Forests model is selected as the final model for it's highest accuracy score.  
+  
+Below is the list of 20 most important variables of the final model (Random Forests):
+
+```{r}
+# important variables
+imp.var <- varImp(rf.fit)
+imp.var
+```
+  
+--------------------
+
+## Predict test cases
+The final model (Random Forests) is used to predict 20 different test cases:
+
+```{r}
+rf.pred <- predict(rf.fit, testing)
+rf.pred
+```
+  
+--------------------
+
+## References
+Trevor Hastie, Robert Tibshirani, and Jerome Friedman. The Elements of Statistical Learning. 2008.  
+Max Kuhn, Kjell Johnson. Applied Predictive Modeling. 2013.     
+Andrew Ng. Machine Learning lecture notes.  
