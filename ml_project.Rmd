@@ -12,15 +12,8 @@ The goal of this project is to predict the manner (class) in which people did th
   
 The data set for this project was collected from the accelerometers worn on the belt, forearm, arm, and dumbell of six young healthy participants.  These six participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell 
 only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.  These classes are levels of the "classe" variable in the training set. 
-  
+    
 --------------------
-
-```{r, echo=FALSE, results='hide'}
-library(ggplot2)
-library(caret)
-library(kernlab)
-library(randomForest)
-```
 
 ## Get data
 The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
@@ -88,7 +81,7 @@ The new dimension above, with the number of features p much smaller than the num
       
 Principal Component Analysis (PCA) is used for data visualization by reducing 54 variables to 2 Principal Components (PC1 and PC2) so that 2D plot can be created (because we human can only visualize 2D or 3D graphs).  Note that PCA is used for data visualizaton ONLY in this project.  It is not used for data pre-processing or training because it could remove variables which have valuable information (signal) and it tends to be used for unsupervised machine learning only.
   
-```{r,echo=FALSE,fig.width=5,fig.height=5}
+```{r,fig.width=5,fig.height=5}
 # use PCA to visualize data only
 plotdata <- data.frame(apply(training, 2, as.numeric))
 plotdata <- plotdata[,-54]
@@ -101,7 +94,7 @@ plot(dataPC[,1], dataPC[,2], col="blue", main="Plot of PC1 and PC2", ylab="PC1",
 
 In the scatter plot above, all the data points concentrate and form five distinctive groups which likely are five classes (manners) of the weight lifting exercise.  There's only one data point on the far upper left corner, so it could be neglectible.        
 
-```{r,echo=FALSE,fig.width=5,fig.height=5}
+```{r,fig.width=5,fig.height=5}
 qplot(training$classe)
 ```
 
@@ -171,7 +164,7 @@ confusionMatrix(cv.set$classe, predict(rf.fit, cv.set))
 ## Model selection
 The resamples function is used to compare these three models based on their cross-validation statistics.  Since the random number seed was initialized prior to running these models, paired accuracy measurements exist for each data set.
 
-```{r,echo=FALSE}
+```{r}
 # resample to compare
 resamp <- resamples(list(KNN=knn.fit, GBM=gbm.fit, RF=rf.fit))
 # summarize
@@ -202,7 +195,7 @@ rf.fit$times$everything
 ```
   
 ### Final model
-From the summary, boxplot, and computation time lists, we can see that the Random Forests model has the highest accuracy score which is 0.996.  The GBM model has a very good accuracy score too, which is 0.986 (very closed to the RF accuracy score).  The GBM model has 3 times shorter computation time (compare to the RF model).  But because we have a limit of 2 times to predict for each test case in this project.  So, accuracy score is more important than computation time in this case.  Therefore, the Random Forests model is selected as the final model for it's highest accuracy score.  
+From the summary, boxplot, and computation time lists, we can see that the Random Forests model has the highest accuracy score which is 0.996.  The GBM model has a very good accuracy score too, which is 0.986 (very closed to the RF accuracy score).  The GBM model has 3 times shorter computation time (compare to the RF model).  But because we have a limit of only 2 times to predict for each test case in this project.  So, accuracy score is more important than computation time in this case.  Therefore, the Random Forests model is selected as the final model for it's highest accuracy score.  
   
 Below is the list of 20 most important variables of the final model (Random Forests):
 
